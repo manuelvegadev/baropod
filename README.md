@@ -2,6 +2,10 @@
 
 Sistema portátil de medición de presión plantar diseñado para acompañar el tratamiento fisioterapéutico de pie plano en pacientes pediátricos. La plantilla, equipada con sensores de fuerza distribuidos en zonas anatómicas clave, permite visualizar en tiempo real cómo se reparte el peso corporal a lo largo del pie durante el apoyo estático y la marcha.
 
+<p align="center">
+  <img width="2505" height="2116" alt="Screenshot_20260506_014646_Pie Plano-left" src="https://github.com/user-attachments/assets/c6a0ebd7-5c69-4ddd-89c3-72a3ad4ca4f5" />
+</p>
+
 ## Objetivo
 
 Desarrollar una herramienta accesible y de bajo costo que permita a los profesionales en fisioterapia obtener mediciones cuantitativas y reproducibles de la distribución de presión plantar en niños con pie plano, con el fin de:

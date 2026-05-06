@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Override del color "background" cuando el sistema está en dark mode.
+         Esto sólo afecta al windowBackground / statusBar declarados en el
+         tema XML. Los colores de Compose vienen de BaropodTheme. -->
+    <color name="background">#141414</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="ic_launcher_background">#7A6750</color>
+</resources>

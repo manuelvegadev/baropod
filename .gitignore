@@ -1,0 +1,27 @@
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.gradle/
+
+# Local config — contiene rutas absolutas del SDK
+local.properties
+
+# macOS
+.DS_Store
+
+# Build outputs (en la raíz y en cualquier módulo)
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Artefactos
+*.apk
+*.aab
+
+# Logs / dumps
+*.log
+*.hprof
+
+# Output del Profiler
+*.trace

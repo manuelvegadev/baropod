@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#F5F2ED</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="primary">#5D4F3A</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="secondary">#A0876A</color>
+    <color name="foot_fill">#F5DCC4</color>
+    <color name="foot_stroke">#5D4F3A</color>
+    <color name="sensor_marker">#2C2C2A</color>
+    <color name="status_ok">#2E8B57</color>
+    <color name="status_warn">#E0A030</color>
+    <color name="status_error">#A32D2D</color>
+    <color name="ic_launcher_background">#F5DCC4</color>
+</resources>

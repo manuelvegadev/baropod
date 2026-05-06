@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Baropod</string>
+
+    <!-- Pantalla de conexión -->
+    <string name="title_connection">Baropod</string>
+    <string name="subtitle_connection">Selecciona el dispositivo para iniciar la captura</string>
+    <string name="paired_devices">Dispositivos emparejados</string>
+    <string name="refresh">Actualizar</string>
+    <string name="connect">Conectar</string>
+    <string name="connecting">Conectando…</string>
+    <string name="bt_disabled_title">Bluetooth desactivado</string>
+    <string name="bt_disabled_body">Activa el Bluetooth en los ajustes del sistema para continuar.</string>
+    <string name="open_settings">Abrir ajustes</string>
+    <string name="open_bluetooth_settings">Abrir ajustes Bluetooth</string>
+    <string name="permissions_title">Permisos necesarios</string>
+    <string name="permissions_body">Esta app necesita permisos de Bluetooth para conectarse al ESP32.</string>
+    <string name="grant_permissions">Conceder permisos</string>
+    <string name="no_devices_title">Sin dispositivos emparejados</string>
+    <string name="no_devices_body">Empareja tu ESP32 (Baropod_ESP32) desde los ajustes de Bluetooth del sistema y vuelve a esta pantalla.</string>
+
+    <!-- Estado de conexión -->
+    <string name="status_disconnected">Desconectado</string>
+    <string name="status_connecting">Conectando…</string>
+    <string name="status_connected">Conectado · %1$s</string>
+    <string name="status_error">Error: %1$s</string>
+
+    <!-- Pantalla de visualización -->
+    <string name="pause">Pausar</string>
+    <string name="resume">Reanudar</string>
+    <string name="disconnect">Desconectar</string>
+    <string name="legend_scale">Escala de presión</string>
+    <string name="legend_min">0%</string>
+    <string name="legend_max">100%+</string>
+</resources>

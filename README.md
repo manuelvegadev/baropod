@@ -209,4 +209,10 @@ Proyecto académico interdisciplinario desarrollado por estudiantes de fisiotera
 
 ## Licencia
 
-Distribuido bajo la licencia **MIT**. Ver el archivo [LICENSE](LICENSE) para los términos completos.
+Distribuido bajo la licencia **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**. Resumen:
+
+- **Atribución (BY)**: cualquier uso debe acreditar a los autores originales.
+- **No comercial (NC)**: no se permite usar el material con fines comerciales.
+- **Compartir igual (SA)**: las obras derivadas deben distribuirse bajo la misma licencia.
+
+Ver el archivo [LICENSE](LICENSE) para los términos completos o el [resumen oficial en español](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.es).

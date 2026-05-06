@@ -209,4 +209,4 @@ Proyecto académico interdisciplinario desarrollado por estudiantes de fisiotera
 
 ## Licencia
 
-Por definir.
+Distribuido bajo la licencia **MIT**. Ver el archivo [LICENSE](LICENSE) para los términos completos.

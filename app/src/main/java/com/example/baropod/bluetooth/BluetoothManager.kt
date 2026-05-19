@@ -156,7 +156,7 @@ class BluetoothManager(
          * Nombre BT esperado del dispositivo objetivo. Debe coincidir con el
          * nombre que el firmware del ESP32 publica en `SerialBT.begin(...)`.
          */
-        const val DEFAULT_DEVICE_NAME = "Baropod_ESP32"
+        const val DEFAULT_DEVICE_NAME = "Plantilla_ESP32"
 
         /** Tag para logs de stream BT. Filtrar con `adb logcat -s Baropod-BT`. */
         const val LOG_TAG = "Baropod-BT"

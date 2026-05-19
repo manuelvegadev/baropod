@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Adjust
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -63,6 +65,8 @@ fun VisualizationScreen(
     onTare: () -> Unit,
     onResetTare: () -> Unit,
     onDisconnect: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenPatient: () -> Unit,
     onSetDebugLogging: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -85,7 +89,9 @@ fun VisualizationScreen(
             state = state,
             onTare = onTare,
             onResetTare = onResetTare,
-            onToggleDebug = { showDebug = !showDebug }
+            onToggleDebug = { showDebug = !showDebug },
+            onOpenSettings = onOpenSettings,
+            onOpenPatient = onOpenPatient
         )
         if (showDebug) {
             Spacer(Modifier.height(8.dp))
@@ -93,9 +99,10 @@ fun VisualizationScreen(
         }
         Spacer(Modifier.height(12.dp))
 
-        // Pies (izquierdo + derecho), uno al lado del otro.
-        val leftSlice = sliceForSide(zones, state.lastReading.values, state.zeroOffsets, FootSide.LEFT)
-        val rightSlice = sliceForSide(zones, state.lastReading.values, state.zeroOffsets, FootSide.RIGHT)
+        val leftZones = zones.filter { it.side == FootSide.LEFT }
+        val rightZones = zones.filter { it.side == FootSide.RIGHT }
+        val adcValues = state.lastReading.values
+        val zeroOffsets = state.zeroOffsets
 
         Row(
             modifier = Modifier
@@ -105,13 +112,17 @@ fun VisualizationScreen(
         ) {
             FootColumn(
                 title = "Pie izquierdo",
-                slice = leftSlice,
+                zones = leftZones,
+                adcValues = adcValues,
+                zeroOffsets = zeroOffsets,
                 mirrored = true,
                 modifier = Modifier.weight(1f)
             )
             FootColumn(
                 title = "Pie derecho",
-                slice = rightSlice,
+                zones = rightZones,
+                adcValues = adcValues,
+                zeroOffsets = zeroOffsets,
                 mirrored = false,
                 modifier = Modifier.weight(1f)
             )
@@ -157,51 +168,26 @@ fun VisualizationScreen(
     }
 }
 
-/**
- * Slice de zonas + ADC + offsets que pertenecen a un lado, preservando la
- * alineación posicional con la trama recibida del ESP32.
- */
-private data class FootSlice(
-    val zones: List<SensorZone>,
-    val adcValues: List<Int>,
-    val zeroOffsets: List<Int>
-)
-
-private fun sliceForSide(
-    zones: List<SensorZone>,
-    adcValues: List<Int>,
-    zeroOffsets: List<Int>,
-    side: FootSide
-): FootSlice {
-    val indexed = zones.withIndex().filter { it.value.side == side }
-    val zs = indexed.map { it.value }
-    val adcs = if (adcValues.isEmpty()) emptyList()
-    else indexed.map { adcValues.getOrNull(it.index) ?: 0 }
-    val offs = if (zeroOffsets.isEmpty()) emptyList()
-    else indexed.map { zeroOffsets.getOrNull(it.index) ?: 0 }
-    return FootSlice(zs, adcs, offs)
-}
-
 @Composable
 private fun FootColumn(
     title: String,
-    slice: FootSlice,
+    zones: List<SensorZone>,
+    adcValues: List<Int>,
+    zeroOffsets: List<Int>,
     mirrored: Boolean,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.appColors
 
-    // Suma total de fuerza de los sensores del pie. Si no hay sensores,
-    // mostramos un guion para que se vea que la columna existe pero aún no
-    // tiene datos. El color usa colorFromKg(kg) — saturará en rojo cuando
-    // el total pase los 5 Kg, lo cual es esperable con varios sensores.
-    val totalKg: Float? = if (slice.zones.isEmpty() || slice.adcValues.isEmpty()) {
+    // Sin sensores: mostramos un guion para que la columna se vea presente.
+    val totalKg: Float? = if (zones.isEmpty() || adcValues.isEmpty()) {
         null
     } else {
         var sum = 0f
-        slice.zones.forEachIndexed { i, _ ->
-            val baseline = slice.zeroOffsets.getOrElse(i) { ForceCalibration.ADC_AT_0_KG }
-            val adc = slice.adcValues.getOrNull(i) ?: baseline
+        zones.forEach { zone ->
+            val idx = zone.inputIndex
+            val baseline = zeroOffsets.getOrElse(idx) { ForceCalibration.ADC_AT_0_KG }
+            val adc = adcValues.getOrNull(idx) ?: baseline
             sum += ForceCalibration.adcToKg(adc, baseline)
         }
         sum
@@ -233,9 +219,9 @@ private fun FootColumn(
             contentAlignment = Alignment.Center
         ) {
             FootprintHeatmap(
-                zones = slice.zones,
-                adcValues = slice.adcValues,
-                zeroOffsets = slice.zeroOffsets,
+                zones = zones,
+                adcValues = adcValues,
+                zeroOffsets = zeroOffsets,
                 mirrored = mirrored,
                 modifier = Modifier.fillMaxSize()
             )
@@ -249,7 +235,9 @@ private fun TopStatusBar(
     state: SensorUiState,
     onTare: () -> Unit,
     onResetTare: () -> Unit,
-    onToggleDebug: () -> Unit
+    onToggleDebug: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenPatient: () -> Unit
 ) {
     val colors = MaterialTheme.appColors
     val connection = state.connection
@@ -319,6 +307,20 @@ private fun TopStatusBar(
                     "Tarar"
                 },
                 tint = if (tareEnabled) tareTint else colors.tertiaryText
+            )
+        }
+        IconButton(onClick = onOpenPatient, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Outlined.Person,
+                contentDescription = "Datos del paciente",
+                tint = colors.secondaryText
+            )
+        }
+        IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Outlined.Settings,
+                contentDescription = "Calibración",
+                tint = colors.secondaryText
             )
         }
     }

@@ -1,24 +1,14 @@
 package com.example.baropod.data
 
 import android.content.Context
-import android.content.SharedPreferences
 
 /**
- * Persistencia de la tara (offsets de cero por sensor) entre sesiones.
- *
- * Se guarda **una entrada por dirección MAC del dispositivo Bluetooth**, así
- * varios dispositivos pueden coexistir sin que la calibración de uno contamine
- * a la del otro. El payload es una cadena CSV de enteros: `"1776,1820"`.
- *
- * Implementado con `SharedPreferences` por simplicidad — no añade dependencias
- * extra y para 2-8 enteros la latencia es despreciable. Si en el futuro hace
- * falta migrar a DataStore (p. ej. para reactividad o tipado fuerte), la API
- * pública de esta clase se mantiene igual.
+ * Tara (offsets de cero por sensor), una entrada por dirección MAC para que
+ * varios dispositivos coexistan sin contaminarse. Payload: CSV de enteros.
  */
 class TareStorage(context: Context) {
 
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = context.baropodPrefs()
 
     /** Devuelve los offsets guardados, o lista vacía si nunca se ha tarado. */
     fun load(deviceAddress: String): List<Int> {
@@ -43,8 +33,4 @@ class TareStorage(context: Context) {
     }
 
     private fun keyFor(address: String) = "tare_$address"
-
-    companion object {
-        private const val PREFS_NAME = "baropod_prefs"
-    }
 }

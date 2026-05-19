@@ -24,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.baropod.BuildConfig
 import com.example.baropod.bluetooth.BluetoothManager
 import com.example.baropod.ui.theme.appColors
 import com.example.baropod.viewmodel.ConnectionState
@@ -53,6 +55,7 @@ fun ConnectionScreen(
     onRefreshDevices: () -> Unit,
     onConnect: (DeviceItem) -> Unit,
     onOpenSettings: () -> Unit,
+    onEnterDevMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selected by remember { mutableStateOf<DeviceItem?>(null) }
@@ -169,6 +172,25 @@ fun ConnectionScreen(
                         )
                     }
                 }
+            }
+        }
+
+        // ----- Modo desarrollo (sólo builds debug) -----
+        // En el flujo normal, la lista de dispositivos consume el peso
+        // vertical disponible y este botón queda anclado al fondo. En las
+        // ramas con InfoCard (sin BT / sin permisos / sin dispositivos) cae
+        // justo debajo del card — sigue siendo discreto y accesible.
+        if (BuildConfig.DEBUG) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = onEnterDevMode,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Modo desarrollo (sin Bluetooth)",
+                    fontSize = 12.sp,
+                    color = colors.tertiaryText
+                )
             }
         }
     }

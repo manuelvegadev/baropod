@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -30,7 +29,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import com.example.baropod.R
 import com.example.baropod.model.SensorZone
 import com.example.baropod.ui.theme.appColors
@@ -79,15 +77,10 @@ fun FootprintHeatmap(
     val sensorMarker = MaterialTheme.appColors.sensorMarker
     val markerInnerColor = MaterialTheme.appColors.background
 
-    // Aspecto del pie tomado de la imagen real (mantiene la alineación 1:1).
-    val imageAspect = remember(outlineImage) {
-        outlineImage.width.toFloat() / outlineImage.height.toFloat()
-    }
-
-    // Fuerza en Kg por sensor (sin clamp arriba: nos importa la saturación).
-    val kgValues = zones.indices.map { i ->
-        val baseline = zeroOffsets.getOrElse(i) { ForceCalibration.ADC_AT_0_KG }
-        val adc = adcValues.getOrNull(i) ?: baseline
+    val kgValues = zones.map { zone ->
+        val idx = zone.inputIndex
+        val baseline = zeroOffsets.getOrElse(idx) { ForceCalibration.ADC_AT_0_KG }
+        val adc = adcValues.getOrNull(idx) ?: baseline
         ForceCalibration.adcToKg(adc, baseline)
     }
 
@@ -114,23 +107,11 @@ fun FootprintHeatmap(
     )
 
     BoxWithConstraints(modifier = modifier) {
-        val maxW = maxWidth
-        val maxH = maxHeight
+        val box = rememberFootBox(outlineImage, maxWidth, maxHeight)
         val density = LocalDensity.current
 
-        // Ajustamos el bbox del pie al composable preservando aspecto.
-        val (footWDp, footHDp) = remember(maxW, maxH, imageAspect) {
-            val targetWByH = maxH.value * imageAspect
-            if (targetWByH <= maxW.value) {
-                Pair(targetWByH.dp, maxH)
-            } else {
-                Pair(maxW, (maxW.value / imageAspect).dp)
-            }
-        }
-
-        // Sólo necesitamos el buffer offscreen cuando hay zonas que requieren
-        // BlendMode.DstIn. Sin sensores (p. ej. el pie izquierdo aún sin
-        // hardware) ahorramos el costo de la capa offscreen entera.
+        // Sin zonas (p. ej. pie izquierdo aún sin hardware): saltamos la capa
+        // offscreen costosa, sólo dibujamos el croquis.
         val needsOffscreen = zones.isNotEmpty()
 
         Canvas(
@@ -146,10 +127,10 @@ fun FootprintHeatmap(
             val canvasW = size.width
             val canvasH = size.height
 
-            val footW = with(density) { footWDp.toPx() }
-            val footH = with(density) { footHDp.toPx() }
-            val left = (canvasW - footW) / 2f
-            val top = (canvasH - footH) / 2f
+            val left = box.leftPx
+            val top = box.topPx
+            val footW = box.widthPx
+            val footH = box.heightPx
 
             val dstOffset = IntOffset(left.toInt(), top.toInt())
             val dstSize = IntSize(footW.toInt(), footH.toInt())

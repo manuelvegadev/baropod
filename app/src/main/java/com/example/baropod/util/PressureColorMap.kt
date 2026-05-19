@@ -12,14 +12,13 @@ import androidx.compose.ui.graphics.lerp
  */
 object ForceCalibration {
     /** ADC en reposo, sin presión sobre el sensor. Mapea a 0 Kg. */
-    const val ADC_AT_0_KG: Int = 1716
+    const val ADC_AT_0_KG: Int = 1800
 
     /**
-     * ADC con 1 Kg de fuerza aplicada (calibración con un dedo). El rango
-     * 1716 → 2200 = 484 unidades ≈ 1 Kg. Asumiendo respuesta lineal, los
-     * 5 Kg del fondo de escala caen en ~ADC 4136, justo más allá de la
-     * saturación del ADC de 12 bits (4095): conveniente, porque significa
-     * que la app puede mostrar el rango entero del sensor.
+     * ADC con 1 Kg de fuerza aplicada (calibración con un dedo apretado).
+     * Span 1800 → 2200 = 400 unidades/Kg. Asumiendo linealidad, 5 Kg ≈
+     * ADC 3800, dentro del rango de 12 bits (4095): no saturamos el ADC
+     * antes del fondo de escala.
      */
     const val ADC_AT_1_KG: Int = 2200
 

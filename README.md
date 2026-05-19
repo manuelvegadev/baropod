@@ -35,18 +35,27 @@ El sistema físico consiste en una plantilla flexible que se inserta en el calza
 
 ### Sensado
 
-- **Sensores resistivos de fuerza RFP-602 (rango 0 – 5 Kg)** distribuidos en posiciones anatómicas relevantes para la evaluación de pie plano. La configuración objetivo, por pie, es:
-  - 1 en el talón
-  - 1 en el arco medial (zona crítica para detectar caída del arco)
-  - 1 en el arco lateral
-  - 4 en cabezas metatarsales
-  - 1 en el hallux
-- Cada sensor se lee mediante un **divisor de tensión con resistencia fija de 10 kΩ**, convirtiendo la variación de resistencia del sensor en un voltaje proporcional a la fuerza aplicada.
+**8 sensores resistivos de fuerza RFP-602 (rango 0 – 5 Kg)** distribuidos en zonas anatómicas relevantes para la evaluación de pie plano:
+
+| Sensor | GPIO | Zona anatómica |
+|---|---|---|
+| S1 | 36 (VP) | Halux |
+| S2 | 39 (VN) | 1er Metatarsiano |
+| S3 | 34 (D34) | 3er Metatarsiano |
+| S4 | 35 (D35) | 5to Metatarsiano |
+| S5 | 32 (D32) | Arco Medial |
+| S6 | 33 (D33) | Mediopié Lateral |
+| S7 | 25 (D25) | Talón Medial |
+| S8 | 26 (D26) | Talón Lateral |
+
+Cada sensor se lee mediante un **divisor de tensión con resistencia fija de 10 kΩ** a GND, con 3.3 V en el otro extremo. La variación de resistencia del sensor produce un voltaje proporcional a la fuerza aplicada.
+
+> El cableado físico es reasignable desde la pantalla de **Calibración** de la app: si una zona quedó conectada al GPIO equivocado, se intercambia el `inputIndex` sin re‑flashear el firmware.
 
 ### Procesamiento
 
 - **Microcontrolador ESP32 DevKit V1** con doble núcleo a 240 MHz, WiFi y Bluetooth integrados. Encargado de leer las entradas analógicas y transmitir los datos al exterior.
-- Se utilizan los pines del **bloque ADC1** (GPIO 32, 33, 34, 35, 36, 39) para garantizar lecturas estables cuando la radio Bluetooth está activa. Los pines de ADC2 comparten hardware con la radio y producen picos espurios de lectura.
+- Se usan **6 pines de ADC1** (GPIO 32–36, 39) y **2 de ADC2** (GPIO 25, 26). ADC2 funciona con Bluetooth Classic activo pero queda inutilizable si se enciende WiFi, así que el firmware no habilita WiFi.
 
 ### Alimentación
 
@@ -81,21 +90,24 @@ Funcionalidades implementadas:
 - **Visualización tipo *reveal-mask*** sobre la silueta del pie: el croquis siempre está visible y, conforme aumenta la presión sobre cada sensor, se "estampa" progresivamente una huella plantar real (técnica de offscreen layer + `BlendMode.DstIn`).
 - **Soporte para ambos pies**: el pie izquierdo se renderiza espejando la misma imagen y aplicando el mismo sistema de zonas. El layout lateral muestra el total en Kg por pie con color por intensidad.
 - **Gráfica de fuerza vs. tiempo** (10 segundos rolling, eje Y 0 – 5 Kg) con una traza por sensor en colores distinguibles, etiqueta del valor actual y línea de referencia en el fondo de escala.
+- **Pantalla de Calibración**: arrastra los 8 dots sobre la silueta para reposicionarlos y reasigna a qué entrada de la trama (1–8) alimenta cada zona mediante un menú. La reasignación intercambia, así nunca queda una entrada huérfana. Los cambios se persisten al instante.
+- **Pantalla de Datos del Paciente**: nombre, edad, altura, peso, **IMC calculado**, y galería de fotos importadas desde el Photo Picker del sistema (Android 13+ sin permisos extra). Auto‑guardado en cada edición; las fotos se copian a almacenamiento interno para sobrevivir a borrados externos.
 - **Tara ("calibrar a 0") persistente por dispositivo**: SharedPreferences con clave por MAC, así varias plantillas pueden coexistir sin que la calibración de una contamine a la otra. Long-press para descartar.
+- **Modo desarrollo** (sólo builds debug): atajo en la pantalla de conexión que arranca la visualización con 8 canales sintéticos a 20 Hz, útil para iterar sobre la UI sin el ESP32.
 - **Soporte de modo claro / oscuro** con paleta de colores y composición offscreen idénticas en ambos.
 - **Panel de diagnóstico de stream BT** (long-press en el indicador de Hz): Δt instantáneo, media, σ, min/max, conteo de líneas y errores de parseo, última línea cruda recibida. Útil para detectar problemas de buffering o ruido en el ADC.
 
 ### Comunicación
 
-La plantilla y la aplicación se comunican vía **Bluetooth Classic (SPP)** con un protocolo basado en líneas de texto:
+La plantilla y la aplicación se comunican vía **Bluetooth Classic (SPP)** con un protocolo basado en líneas de texto. Una muestra es una trama ASCII con 8 enteros ADC (0–4095) separados por coma, terminada en `\n`:
 
 ```
-1716,1820\n
-1721,1817\n
+1820,1750,1900,1830,2100,2250,1780,1820\n
+1818,1751,1899,1828,2103,2247,1782,1820\n
 ...
 ```
 
-Cada línea es una muestra ADC cruda separada por comas. La app la convierte a Kg usando la tara guardada para ese dispositivo más una pendiente fija (calibración de span). El protocolo es trivialmente depurable con cualquier terminal serial.
+El parser de la app es **tolerante al tamaño** (la trama puede crecer a 16 cuando ambos pies estén instrumentados) y descarta líneas malformadas en silencio. La conversión a Kg usa la tara guardada para ese dispositivo más la pendiente fija de calibración. El protocolo es trivialmente depurable con cualquier terminal serial.
 
 ## Fundamento académico
 
@@ -103,25 +115,27 @@ El diseño se apoya en la metodología de [Hsu et al. 2018](https://www.mdpi.com
 
 ## Estado del proyecto
 
-**En desarrollo.** Prototipo funcional con **2 sensores en el pie derecho** (talón y metatarsal) y la app Android operativa.
+**En desarrollo.** Prototipo funcional con los **8 sensores del pie derecho** cableados y la app Android operativa de extremo a extremo.
 
 ### Implementado
 
-- Adquisición y transmisión BT a 20 Hz desde el ESP32.
-- App Android con conexión / reconexión automática y manejo de permisos en runtime.
-- Modelo de zonas escalable a 8 sensores por pie (placeholders ya en código).
+- Firmware ESP32 con 8 canales analógicos a 20 Hz, promediado por sensor y transmisión BT Classic SPP. Sketch en [`firmware/baropod_8sensores/`](firmware/baropod_8sensores/baropod_8sensores.ino).
+- App Android (Kotlin + Compose, MVVM) con conexión / reconexión automática y manejo de permisos en runtime.
 - Renderizado *reveal-mask* sobre imagen real de huella, marcadores tipo "diana" del tamaño aproximado del sensor real.
 - Gráfica de fuerza vs. tiempo y total por pie en kilogramos.
-- Tara persistente por MAC, con descarte por gesto.
+- Pantalla de Calibración: drag & drop de zonas, reasignación de `inputIndex` por permutación.
+- Pantalla de Datos del Paciente con IMC calculado y galería de fotos.
+- Tara persistente por MAC, con descarte por long-press.
+- Modo desarrollo (builds debug) con stream sintético de 8 canales.
 - Tema claro / oscuro.
 - Panel de diagnóstico para depurar buffering / jitter del stream BT.
 
 ### Próximos pasos
 
-- Escalado a la matriz completa de 8 sensores por pie.
+- Instrumentar el pie izquierdo (escalar la trama a 16 valores; la app ya es trama‑tamaño agnóstica).
 - Calibración formal con pesos de referencia y curva no lineal del FSR.
 - Diseño de la plantilla física flexible (PCB / cableado plano).
-- Registro de sesiones vinculado a un perfil de paciente.
+- Registro de sesiones vinculado al perfil de paciente persistido.
 - Exportación a CSV para análisis externo.
 - Detección automática del ciclo de marcha y métricas (tiempo de apoyo, distribución medial / lateral, simetría L-R).
 
@@ -134,21 +148,27 @@ baropod/
 │       ├── java/com/example/baropod/
 │       │   ├── MainActivity.kt
 │       │   ├── bluetooth/              # BluetoothManager, parser
-│       │   ├── data/                   # Persistencia (tara + último device)
-│       │   ├── model/                  # SensorZone, FootSide, SensorReading
-│       │   ├── ui/                     # Composables (heatmap, chart, screens)
+│       │   ├── data/                   # Persistencia: tara, último device,
+│       │   │                           #   zonas calibradas, paciente
+│       │   ├── model/                  # SensorZone, FootSide, SensorReading,
+│       │   │                           #   PatientData
+│       │   ├── ui/                     # Composables: Connection, Visualization,
+│       │   │                           #   Settings (calibración), Patient,
+│       │   │                           #   FootprintHeatmap, PressureChart
 │       │   ├── util/                   # Calibración fuerza, paleta
 │       │   └── viewmodel/
 │       └── res/
 │           ├── drawable-nodpi/         # foot_outline.png, foot_print.png
+│           ├── drawable-xxxhdpi/       # ic_launcher_foreground (emoji 🦶)
 │           ├── values{,-night}/        # colores, temas, strings
 │           └── ...
+├── firmware/
+│   └── baropod_8sensores/              # Sketch Arduino para ESP32 (8 sensores)
+│       └── baropod_8sensores.ino
 ├── build.gradle.kts
 ├── settings.gradle.kts
 └── README.md
 ```
-
-El firmware del ESP32 vive aparte; un sketch de Arduino mínimo lo encuentras en la sección de configuración más abajo.
 
 ## Configuración
 
@@ -161,47 +181,15 @@ El firmware del ESP32 vive aparte; un sketch de Arduino mínimo lo encuentras en
 
 Stack: AGP 8.5.2 · Kotlin 2.0.20 · Gradle 8.9 · Compose BOM 2024.09.02 · Material 3.
 
-### Firmware ESP32 (referencia)
+### Firmware ESP32
 
-Sketch mínimo de Arduino para 2 sensores. Los pines son GPIO 32 y 33 (ADC1, sin conflicto con BT):
+El sketch listo para flashear vive en [`firmware/baropod_8sensores/baropod_8sensores.ino`](firmware/baropod_8sensores/baropod_8sensores.ino).
 
-```cpp
-#include "BluetoothSerial.h"
-
-BluetoothSerial SerialBT;
-const int NUM_SENSORES = 2;
-const int PINES[NUM_SENSORES] = { 32, 33 };
-const char* NOMBRE_BT = "Baropod_ESP32";
-const int INTERVALO_MS = 50;  // 20 Hz
-unsigned long ultimoEnvio = 0;
-
-void setup() {
-  Serial.begin(115200);
-  SerialBT.begin(NOMBRE_BT);
-  analogReadResolution(12);
-}
-
-int leerPromedio(int pin, int n) {
-  long suma = 0;
-  for (int i = 0; i < n; i++) { suma += analogRead(pin); delayMicroseconds(500); }
-  return suma / n;
-}
-
-void loop() {
-  if (millis() - ultimoEnvio < INTERVALO_MS) return;
-  ultimoEnvio = millis();
-  String msg = "";
-  for (int s = 0; s < NUM_SENSORES; s++) {
-    msg += String(leerPromedio(PINES[s], 10));
-    if (s < NUM_SENSORES - 1) msg += ",";
-  }
-  msg += "\n";
-  Serial.print(msg);
-  if (SerialBT.hasClient()) SerialBT.print(msg);
-}
-```
-
-Tras flashear, emparejar `Baropod_ESP32` desde los ajustes Bluetooth del celular y abrir la app: hará auto-conexión.
+1. Abrir el archivo en **Arduino IDE** con el core *esp32* instalado.
+2. Seleccionar la placa **DOIT ESP32 DEVKIT V1** y el puerto serial.
+3. Subir. No requiere librerías externas más allá de `BluetoothSerial.h` (incluida en el core).
+4. Emparejar **`Plantilla_ESP32`** desde los ajustes Bluetooth del celular.
+5. Abrir la app: hará auto-conexión al último dispositivo emparejado en sesiones futuras.
 
 ## Equipo
 

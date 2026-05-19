@@ -2,9 +2,11 @@ package com.example.baropod.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,6 +60,7 @@ private val Y_TICKS_KG = floatArrayOf(0f, 1f, 2f, 3f, 4f, 5f)
  *               (5 Kg). Cualquier valor por encima se ve "saturado" y la
  *               línea se dibuja al borde superior.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PressureChart(
     history: List<FloatArray>,
@@ -150,10 +153,12 @@ fun PressureChart(
                     )
                 }
 
-                // 2) Trazas por sensor.
-                history.forEachIndexed { sensorIdx, samples ->
+                // Color por posición de la zona (no por inputIndex): aunque el
+                // usuario remapee, "Talón" sigue siendo azul.
+                zones.forEachIndexed { zIdx, zone ->
+                    val samples = history.getOrNull(zone.inputIndex) ?: return@forEachIndexed
                     if (samples.isEmpty()) return@forEachIndexed
-                    val traceColor = sensorColors.getOrElse(sensorIdx) { Color.Gray }
+                    val traceColor = sensorColors.getOrElse(zIdx) { Color.Gray }
                     val n = samples.size
 
                     if (n == 1) {
@@ -185,11 +190,10 @@ fun PressureChart(
                     // Etiqueta del valor actual: nombre corto + Kg con color de intensidad.
                     val lastKg = samples[n - 1]
                     val lastY = plotB - (lastKg.coerceIn(0f, yMaxKg) / yMaxKg) * plotH
-                    val shortLabel = zones.getOrNull(sensorIdx)?.shortLabel ?: "S${sensorIdx + 1}"
                     val kgText = String.format("%.1f Kg", lastKg)
                     val intensityColor = colorFromKg(lastKg)
                     val annotated = buildAnnotatedString {
-                        withStyle(SpanStyle(color = traceColor)) { append(shortLabel) }
+                        withStyle(SpanStyle(color = traceColor)) { append(zone.shortLabel) }
                         append("  ")
                         withStyle(SpanStyle(color = intensityColor)) { append(kgText) }
                     }
@@ -216,10 +220,13 @@ fun PressureChart(
 
         Spacer(Modifier.height(6.dp))
 
-        Row(
+        // Leyenda compacta: con 8 sensores no caben en una sola fila en
+        // pantallas pequeñas; `FlowRow` envuelve a la siguiente línea sin
+        // recortar etiquetas.
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             zones.forEachIndexed { i, zone ->
                 val traceColor = sensorColors.getOrElse(i) { Color.Gray }
@@ -232,8 +239,8 @@ fun PressureChart(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "${zone.name} · ${zone.shortLabel}",
-                        fontSize = 11.sp,
+                        text = "${zone.shortLabel} · ${zone.name}",
+                        fontSize = 10.sp,
                         color = colors.secondaryText
                     )
                 }

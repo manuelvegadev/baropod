@@ -7,19 +7,29 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import android.net.Uri
 import com.example.baropod.bluetooth.BluetoothManager
 import com.example.baropod.bluetooth.readLines
 import com.example.baropod.bluetooth.SensorDataParser
 import com.example.baropod.data.DevicePreferences
+import com.example.baropod.data.PatientStorage
 import com.example.baropod.data.TareStorage
+import com.example.baropod.data.ZoneConfigStorage
+import com.example.baropod.model.PatientData
 import com.example.baropod.model.SensorReading
+import com.example.baropod.model.SensorZone
 import com.example.baropod.util.ForceCalibration
+import java.io.File
+import kotlin.math.PI
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -91,9 +101,34 @@ class SensorViewModel(
     private val btManager = BluetoothManager(application.applicationContext)
     private val tareStorage = TareStorage(application.applicationContext)
     private val devicePrefs = DevicePreferences(application.applicationContext)
+    private val zoneStorage = ZoneConfigStorage(application.applicationContext)
+    private val patientStorage = PatientStorage(application.applicationContext)
 
     private val _state = MutableStateFlow(SensorUiState())
     val state: StateFlow<SensorUiState> = _state.asStateFlow()
+
+    /**
+     * Lista actual de zonas (posiciones + mapeo a la trama del ESP32). Empieza
+     * en `DEFAULT_ZONES` con los overrides persistidos aplicados. La pantalla
+     * de Calibración la edita y los cambios se reflejan inmediatamente en la
+     * visualización porque ambas pantallas la consumen como `StateFlow`.
+     */
+    private val _zones = MutableStateFlow(
+        zoneStorage.applyOverrides(SensorZone.DEFAULT_ZONES)
+    )
+    val zones: StateFlow<List<SensorZone>> = _zones.asStateFlow()
+
+    /**
+     * Datos del paciente activo. Cargados desde `SharedPreferences` al
+     * inicializar el VM y persistidos tras cada edición. Las fotos viven
+     * como archivos en `filesDir/patient_photos/`; el flow guarda sólo los
+     * nombres de archivo.
+     */
+    private val _patientData = MutableStateFlow(patientStorage.load())
+    val patientData: StateFlow<PatientData> = _patientData.asStateFlow()
+
+    /** Carpeta donde residen las fotos del paciente — para que la UI resuelva File. */
+    val patientPhotosDir: File get() = patientStorage.photosDir
 
     private var readJob: Job? = null
 
@@ -379,6 +414,159 @@ class SensorViewModel(
         }
     }
 
+    // ---------- Modo desarrollo (sin Bluetooth) ----------
+
+    /**
+     * Atajo para trabajar en la UI sin hardware: marca la conexión como
+     * Connected("DEV") y arranca una coroutine que emite 8 valores ADC
+     * sintéticos a 20 Hz (ondas senoidales con periodos distintos por canal
+     * para que la huella y la gráfica realmente se animen).
+     *
+     * Pensado para builds debug. En release, la pantalla de conexión no
+     * expone el botón que invoca este método (ver `ConnectionScreen`).
+     */
+    fun enterDevMode() {
+        if (_state.value.connection is ConnectionState.Connecting) return
+        readJob?.cancel()
+
+        currentDeviceAddress = null
+        _state.update {
+            it.copy(
+                connection = ConnectionState.Connected("DEV (sintético)"),
+                zeroOffsets = emptyList(),
+                pressureHistory = emptyList(),
+                paused = false
+            )
+        }
+
+        // Reset del tracking de stream que se inspecciona en el panel de debug.
+        recentInterArrivals.clear()
+        totalLines = 0
+        parseErrors = 0
+        lastLineTsMs = 0L
+        lastRawLine = ""
+        historyBuffers = emptyList()
+
+        readJob = viewModelScope.launch(Dispatchers.Default) {
+            val startMs = System.currentTimeMillis()
+            while (isActive) {
+                val now = System.currentTimeMillis()
+                val values = synthesizeSamples(now - startMs)
+                val reading = SensorReading(now, values)
+                // Reusamos la misma ruta que las líneas BT reales para que
+                // todas las métricas (Hz, jitter, historia) sigan vivas.
+                onLineReceived(values.joinToString(","), reading, now)
+                delay(SYNTH_INTERVAL_MS)
+            }
+        }
+    }
+
+    /**
+     * 8 canales senoidales con periodos distintos (2..3.4 s) y fases
+     * desfasadas: cada uno oscila entre ~1800 (≈ 0 Kg) y ~2400 (≈ 1.5 Kg),
+     * suficiente para ver los blobs encender y apagar y todas las trazas
+     * separadas en la gráfica.
+     */
+    private fun synthesizeSamples(elapsedMs: Long): List<Int> {
+        val t = elapsedMs / 1000.0
+        return List(8) { i ->
+            val period = 2.0 + i * 0.2
+            val phase = i * PI / 4.0
+            val sine = sin(2.0 * PI * t / period + phase)
+            val frac = 0.5 * (1.0 + sine)  // [0,1]
+            (SYNTH_BASELINE + SYNTH_RANGE * frac).toInt()
+        }
+    }
+
+    // ---------- Calibración de zonas ----------
+
+    /**
+     * Reposiciona la zona [shortLabel] dentro del bounding box del pie. Los
+     * parámetros se reciben ya normalizados (0..1) y se acotan defensivamente.
+     */
+    fun updateZonePosition(shortLabel: String, nx: Float, ny: Float) {
+        val clampedX = nx.coerceIn(0f, 1f)
+        val clampedY = ny.coerceIn(0f, 1f)
+        val updated = _zones.value.map {
+            if (it.shortLabel == shortLabel) it.copy(nx = clampedX, ny = clampedY) else it
+        }
+        _zones.value = updated
+        zoneStorage.saveAll(updated)
+    }
+
+    /**
+     * Reasigna a qué valor de la trama escucha la zona [shortLabel]. Si otro
+     * dot ya estaba usando ese índice, se intercambian (mantiene una
+     * permutación válida — cada índice se usa exactamente una vez).
+     */
+    fun updateZoneInputIndex(shortLabel: String, newInputIndex: Int) {
+        val current = _zones.value
+        val targetZone = current.firstOrNull { it.shortLabel == shortLabel } ?: return
+        if (targetZone.inputIndex == newInputIndex) return
+
+        val oldIndex = targetZone.inputIndex
+        val updated = current.map { z ->
+            when {
+                z.shortLabel == shortLabel -> z.copy(inputIndex = newInputIndex)
+                z.inputIndex == newInputIndex -> z.copy(inputIndex = oldIndex)
+                else -> z
+            }
+        }
+        _zones.value = updated
+        zoneStorage.saveAll(updated)
+    }
+
+    /** Vuelve a los valores compilados en [SensorZone.DEFAULT_ZONES]. */
+    fun resetZones() {
+        zoneStorage.clearAll(SensorZone.DEFAULT_ZONES.map { it.shortLabel })
+        _zones.value = SensorZone.DEFAULT_ZONES
+    }
+
+    // ---------- Datos del paciente ----------
+
+    /**
+     * Helper para mutar `_patientData` y persistir en una sola operación.
+     * Las escrituras a `SharedPreferences` usan `apply()` (asíncrono) así que
+     * llamar a esto en cada keystroke no es problemático.
+     */
+    private inline fun mutatePatient(transform: (PatientData) -> PatientData) {
+        val updated = transform(_patientData.value)
+        _patientData.value = updated
+        patientStorage.save(updated)
+    }
+
+    fun updatePatientName(name: String) = mutatePatient { it.copy(name = name) }
+    fun updatePatientAge(age: Int?) = mutatePatient { it.copy(ageYears = age) }
+    fun updatePatientHeight(heightCm: Float?) = mutatePatient { it.copy(heightCm = heightCm) }
+    fun updatePatientWeight(weightKg: Float?) = mutatePatient { it.copy(weightKg = weightKg) }
+
+    /**
+     * Importa una foto desde una URI externa (Photo Picker / Galería). La
+     * copia se hace en `Dispatchers.IO` porque puede ser un blob grande.
+     * Si la copia falla (URI revocada, almacenamiento lleno, etc.) el flow
+     * de paciente no se modifica y el error queda en logs.
+     */
+    fun addPatientPhoto(uri: Uri) {
+        viewModelScope.launch {
+            val fileName = try {
+                withContext(Dispatchers.IO) { patientStorage.importPhoto(uri) }
+            } catch (e: Throwable) {
+                android.util.Log.w("Baropod", "No se pudo importar la foto $uri", e)
+                return@launch
+            }
+            mutatePatient { it.copy(photoFileNames = it.photoFileNames + fileName) }
+        }
+    }
+
+    fun removePatientPhoto(fileName: String) {
+        // Quitar de la lista primero (UI se actualiza al instante) y borrar
+        // el archivo después en IO.
+        mutatePatient { it.copy(photoFileNames = it.photoFileNames - fileName) }
+        viewModelScope.launch(Dispatchers.IO) {
+            patientStorage.deletePhotoFile(fileName)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         readJob?.cancel()
@@ -391,6 +579,13 @@ class SensorViewModel(
 
         /** Ventana móvil de Δt para calcular avg/min/max/σ del stream BT. */
         const val STATS_WINDOW: Int = 100
+
+        /** Intervalo entre muestras sintéticas en modo desarrollo (20 Hz). */
+        private const val SYNTH_INTERVAL_MS: Long = 50L
+        /** ADC base de los canales sintéticos — coincide con `ADC_AT_0_KG`. */
+        private const val SYNTH_BASELINE: Double = 1800.0
+        /** Amplitud pico a pico (ADC) — llega a ~1.5 Kg en el pico. */
+        private const val SYNTH_RANGE: Double = 600.0
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

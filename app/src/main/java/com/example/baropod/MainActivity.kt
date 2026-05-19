@@ -18,8 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.baropod.model.SensorZone
 import com.example.baropod.ui.ConnectionScreen
+import com.example.baropod.ui.PatientScreen
+import com.example.baropod.ui.SettingsScreen
 import com.example.baropod.ui.VisualizationScreen
 import com.example.baropod.ui.theme.BaropodTheme
 import com.example.baropod.viewmodel.ConnectionState
@@ -98,7 +99,10 @@ private fun AppRoot(
 
     val hasPermissions = viewModel.hasAllRequiredPermissions()
     val btEnabled = viewModel.isBluetoothEnabled()
-    val zones = remember { SensorZone.DEFAULT_ZONES }
+    val zones by viewModel.zones.collectAsStateWithLifecycle()
+    val patient by viewModel.patientData.collectAsStateWithLifecycle()
+
+    var subScreen by remember { mutableStateOf<SubScreen>(SubScreen.Main) }
 
     // Auto-conexión al último dispositivo recordado. El VM tiene un flag
     // idempotente, así que esto sólo dispara la primera vez por proceso.
@@ -108,17 +112,47 @@ private fun AppRoot(
         }
     }
 
+    // Si la conexión se pierde mientras una subpantalla estaba abierta,
+    // volvemos al Main para que la próxima reconexión arranque limpio.
+    LaunchedEffect(state.connection) {
+        if (state.connection !is ConnectionState.Connected) subScreen = SubScreen.Main
+    }
+
     when (state.connection) {
         is ConnectionState.Connected -> {
-            VisualizationScreen(
-                state = state,
-                zones = zones,
-                onTogglePause = viewModel::togglePaused,
-                onTare = viewModel::tare,
-                onResetTare = viewModel::resetTare,
-                onDisconnect = viewModel::disconnect,
-                onSetDebugLogging = viewModel::setDebugLogging
-            )
+            when (subScreen) {
+                SubScreen.Settings -> SettingsScreen(
+                    zones = zones,
+                    lastReading = state.lastReading,
+                    zeroOffsets = state.zeroOffsets,
+                    onUpdateZonePosition = viewModel::updateZonePosition,
+                    onUpdateZoneInputIndex = viewModel::updateZoneInputIndex,
+                    onReset = viewModel::resetZones,
+                    onBack = { subScreen = SubScreen.Main }
+                )
+                SubScreen.Patient -> PatientScreen(
+                    patient = patient,
+                    photosDir = viewModel.patientPhotosDir,
+                    onUpdateName = viewModel::updatePatientName,
+                    onUpdateAge = viewModel::updatePatientAge,
+                    onUpdateHeight = viewModel::updatePatientHeight,
+                    onUpdateWeight = viewModel::updatePatientWeight,
+                    onAddPhoto = viewModel::addPatientPhoto,
+                    onRemovePhoto = viewModel::removePatientPhoto,
+                    onBack = { subScreen = SubScreen.Main }
+                )
+                SubScreen.Main -> VisualizationScreen(
+                    state = state,
+                    zones = zones,
+                    onTogglePause = viewModel::togglePaused,
+                    onTare = viewModel::tare,
+                    onResetTare = viewModel::resetTare,
+                    onDisconnect = viewModel::disconnect,
+                    onOpenSettings = { subScreen = SubScreen.Settings },
+                    onOpenPatient = { subScreen = SubScreen.Patient },
+                    onSetDebugLogging = viewModel::setDebugLogging
+                )
+            }
         }
         else -> {
             ConnectionScreen(
@@ -128,8 +162,15 @@ private fun AppRoot(
                 onRequestPermissions = onRequestPermissions,
                 onRefreshDevices = viewModel::refreshPairedDevices,
                 onConnect = { device -> viewModel.connectTo(device.address) },
-                onOpenSettings = if (!btEnabled) onOpenBluetoothSettings else onOpenAppSettings
+                onOpenSettings = if (!btEnabled) onOpenBluetoothSettings else onOpenAppSettings,
+                onEnterDevMode = viewModel::enterDevMode
             )
         }
     }
+}
+
+private sealed interface SubScreen {
+    data object Main : SubScreen
+    data object Settings : SubScreen
+    data object Patient : SubScreen
 }

@@ -5,5 +5,7 @@
          tema XML. Los colores de Compose vienen de BaropodTheme. -->
     <color name="background">#141414</color>
     <color name="surface">#1E1E1E</color>
-    <color name="ic_launcher_background">#7A6750</color>
+    <!-- Mismo naranja oscuro que en light: el icono del launcher no debe
+         cambiar con el tema del sistema. -->
+    <color name="ic_launcher_background">#B84A00</color>
 </resources>

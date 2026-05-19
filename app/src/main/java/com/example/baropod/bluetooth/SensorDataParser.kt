@@ -4,7 +4,10 @@ import com.example.baropod.model.SensorReading
 
 /**
  * Parser de las líneas que envía el ESP32.
- * Formato: "1716,1721\n" (n valores enteros separados por coma, terminados en \n).
+ * Formato: "1820,1750,1900,1830,2100,2250,1780,1820\n"
+ *   - n valores enteros separados por coma, terminados en `\n`.
+ *   - n es variable (la app no asume un número fijo de sensores). Hoy 8;
+ *     en el futuro hasta 16 si se instrumentan ambos pies.
  */
 object SensorDataParser {
 

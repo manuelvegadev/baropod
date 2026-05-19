@@ -11,5 +11,7 @@
     <color name="status_ok">#2E8B57</color>
     <color name="status_warn">#E0A030</color>
     <color name="status_error">#A32D2D</color>
-    <color name="ic_launcher_background">#F5DCC4</color>
+    <!-- Naranja oscuro del icono del launcher. No se ata al tema (queremos
+         que el icono se vea igual en light y dark). -->
+    <color name="ic_launcher_background">#B84A00</color>
 </resources>
